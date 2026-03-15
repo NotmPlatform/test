@@ -33,7 +33,7 @@ BD_URL = os.getenv("BD_URL", "https://t.me/your_channel_post_bd")
 MANAGER_URL = os.getenv("MANAGER_URL", "https://t.me/your_manager_username")
 
 DB_PATH = os.getenv("DB_PATH", "2026up_test_bot.db")
-FOLLOWUP_DELAY_SECONDS = int(os.getenv("FOLLOWUP_DELAY_SECONDS", "900"))  # 15 минут
+FOLLOWUP_DELAY_SECONDS = int(os.getenv("FOLLOWUP_DELAY_SECONDS", "900"))
 
 
 # =========================
@@ -183,7 +183,7 @@ ROLE_WHY = {
 
 
 # =========================
-# HELPERS
+# DB
 # =========================
 def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -384,6 +384,9 @@ def save_action(user, action_text):
     conn.close()
 
 
+# =========================
+# UI / FORMAT
+# =========================
 async def safe_edit_message(message, text, reply_markup=None):
     try:
         await message.edit_text(text, reply_markup=reply_markup)
@@ -488,7 +491,7 @@ def format_result(scores):
     primary_code, secondary_code = calculate_result(scores)
 
     blocks = [
-        f"{RESULT_TEXTS[primary_code]['title']}",
+        f"{ROLE_NAMES[primary_code]}",
         "",
         "Почему подходит:",
         ROLE_WHY[primary_code],
@@ -497,8 +500,10 @@ def format_result(scores):
         ROLE_WHAT_YOU_DO[primary_code],
         "",
         "Ориентир по доходу:",
-        f"{ROLE_SALARY[primary_code]}",
-        "Уровень зависит от опыта, навыков, английского языка и типа компании.",
+        ROLE_SALARY[primary_code],
+        "",
+        "Следующий шаг:",
+        "посмотрите программу или обсудите, с какого направления лучше начать именно вам.",
     ]
 
     if secondary_code and secondary_code != primary_code:
@@ -513,14 +518,14 @@ def format_result(scores):
         f"• Community Manager: {scores['A']}",
         f"• Web3 Marketing: {scores['B']}",
         f"• Business Development: {scores['C']}",
-        "",
-        "Следующий шаг:",
-        "посмотрите программу или обсудите, с какого направления лучше начать именно вам.",
     ])
 
     return primary_code, "\n".join(blocks), secondary_code
 
 
+# =========================
+# ADMIN
+# =========================
 async def send_result_to_admin(user, scores, primary_code, secondary_code, context):
     username = f"@{user.username}" if user.username else "без username"
 
@@ -537,8 +542,14 @@ async def send_result_to_admin(user, scores, primary_code, secondary_code, conte
         f"• Web3 Marketing: {scores['B']}\n"
         f"• Business Development: {scores['C']}"
     )
-
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
+
+
+async def safe_send_result_to_admin(user, scores, primary_code, secondary_code, context):
+    try:
+        await send_result_to_admin(user, scores, primary_code, secondary_code, context)
+    except Exception as e:
+        print(f"Failed to send result to admin: {e}")
 
 
 async def notify_admin_click(user, action_text, context):
@@ -552,17 +563,26 @@ async def notify_admin_click(user, action_text, context):
         f"🆔 Telegram ID: {user.id}\n\n"
         f"Действие: {action_text}"
     )
-
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
 
 
+async def safe_notify_admin_click(user, action_text, context):
+    try:
+        await notify_admin_click(user, action_text, context)
+    except Exception as e:
+        print(f"Failed to notify admin: {e}")
+
+
+# =========================
+# FLOW
+# =========================
 async def animate_analysis(message):
     for step in ANALYSIS_STEPS:
         await safe_edit_message(message, step)
         await asyncio.sleep(1.2)
 
 
-async def schedule_followup(user_id, context: ContextTypes.DEFAULT_TYPE):
+async def schedule_followup(user_id, context):
     await asyncio.sleep(FOLLOWUP_DELAY_SECONDS)
 
     session = get_session(user_id)
@@ -576,12 +596,15 @@ async def schedule_followup(user_id, context: ContextTypes.DEFAULT_TYPE):
         return
 
     primary_code = session.get("primary_code")
-    await context.bot.send_message(
-        chat_id=user_id,
-        text=FOLLOWUP_TEXT,
-        reply_markup=get_followup_keyboard(primary_code)
-    )
-    update_result_engagement(user_id, followup_sent=True)
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=FOLLOWUP_TEXT,
+            reply_markup=get_followup_keyboard(primary_code)
+        )
+        update_result_engagement(user_id, followup_sent=True)
+    except Exception as e:
+        print(f"Failed to send followup: {e}")
 
 
 # =========================
@@ -619,7 +642,7 @@ async def resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def handle_start_test(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_start_test(query, context):
     user = query.from_user
     scores = {"A": 0, "B": 0, "C": 0}
     history = []
@@ -634,7 +657,7 @@ async def handle_start_test(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def handle_resume_test(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_resume_test(query, context):
     user = query.from_user
     session = get_session(user.id)
 
@@ -657,7 +680,7 @@ async def handle_resume_test(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_index, answer_code):
+async def handle_answer(query, context, question_index, answer_code):
     user = query.from_user
     session = get_session(user.id)
 
@@ -703,18 +726,20 @@ async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_inde
 
         await animate_analysis(query.message)
 
-        await send_result_to_admin(
+        # Сначала показываем результат пользователю
+        await safe_edit_message(
+            query.message,
+            result_text,
+            reply_markup=get_result_keyboard(primary_code)
+        )
+
+        # Потом отправляем админу
+        await safe_send_result_to_admin(
             user=user,
             scores=scores,
             primary_code=primary_code,
             secondary_code=secondary_code,
             context=context,
-        )
-
-        await safe_edit_message(
-            query.message,
-            result_text,
-            reply_markup=get_result_keyboard(primary_code)
         )
 
         asyncio.create_task(schedule_followup(user.id, context))
@@ -737,7 +762,7 @@ async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_inde
     )
 
 
-async def handle_go_back(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_go_back(query, context):
     user = query.from_user
     session = get_session(user.id)
 
@@ -777,13 +802,13 @@ async def handle_go_back(query, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def handle_open_program(query, context: ContextTypes.DEFAULT_TYPE, role_code):
+async def handle_open_program(query, context, role_code):
     role_name = ROLE_NAMES[role_code]
     url = ROLE_URLS[role_code]
 
     update_result_engagement(query.from_user.id, engaged=True)
     save_action(query.from_user, f"Открыл программу: {role_name}")
-    await notify_admin_click(query.from_user, f"Открыл программу: {role_name}", context)
+    await safe_notify_admin_click(query.from_user, f"Открыл программу: {role_name}", context)
 
     text = (
         f"Вы выбрали направление: {role_name}\n\n"
@@ -799,7 +824,7 @@ async def handle_open_program(query, context: ContextTypes.DEFAULT_TYPE, role_co
     await query.message.reply_text(text, reply_markup=keyboard)
 
 
-async def handle_choose_other_program(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_choose_other_program(query, context):
     session = get_session(query.from_user.id)
 
     if not session or not session.get("primary_code"):
@@ -810,16 +835,16 @@ async def handle_choose_other_program(query, context: ContextTypes.DEFAULT_TYPE)
 
     update_result_engagement(query.from_user.id, engaged=True)
     save_action(query.from_user, "Нажал кнопку: Посмотреть другие направления")
-    await notify_admin_click(query.from_user, "Нажал кнопку: Посмотреть другие направления", context)
+    await safe_notify_admin_click(query.from_user, "Нажал кнопку: Посмотреть другие направления", context)
 
     text = "Если хотите сравнить ваш основной результат с другими треками, выберите направление ниже."
     await query.message.reply_text(text, reply_markup=get_other_programs_keyboard(primary_code))
 
 
-async def handle_contact_manager(query, context: ContextTypes.DEFAULT_TYPE):
+async def handle_contact_manager(query, context):
     update_result_engagement(query.from_user.id, engaged=True)
     save_action(query.from_user, "Нажал кнопку: Обсудить, что подойдёт именно вам")
-    await notify_admin_click(query.from_user, "Нажал кнопку: Обсудить, что подойдёт именно вам", context)
+    await safe_notify_admin_click(query.from_user, "Нажал кнопку: Обсудить, что подойдёт именно вам", context)
 
     text = (
         "Если хотите, мы поможем выбрать подходящее направление и ответим на ваши вопросы.\n\n"
