@@ -25,17 +25,22 @@ MANAGER_URL = os.getenv("MANAGER_URL", "https://t.me/your_manager_username")
 
 # ===== Тексты =====
 WELCOME_TEXT = """
-Тест на профессию 2026UP 🚀
+Тест 2026UP: какая профессия в Web3 подходит вам больше всего? 🚀
 
-Этот тест лучше проходить после бесплатного курса «Введение в Web3».
+Пройдите 9 коротких вопросов и получите персональную рекомендацию:
+• Community Manager
+• Web3 Marketing
+• Business Development
 
-Вы уже прошли бесплатный курс?
+Тест займет около 2 минут.
+
+Вы уже прошли бесплатный курс «Введение в Web3»?
 """
 
 START_TEST_TEXT = """
 Отлично. Тогда давайте определим, какое направление в Web3 подходит вам больше всего.
 
-Тест состоит из 9 коротких вопросов.
+Вопросы построены так, чтобы определить ваши сильные стороны и наиболее подходящее направление в Web3.
 Отвечайте интуитивно — так результат будет точнее.
 """
 
@@ -43,9 +48,9 @@ QUESTIONS = [
     {
         "question": "1. Что вам обычно даётся легче всего?",
         "options": [
-            ("A", "Понимать людей, поддерживать контакт и помогать им"),
             ("B", "Придумывать идеи, как привлечь внимание к проекту"),
             ("C", "Находить возможности, договариваться и продвигать интересы"),
+            ("A", "Понимать людей, поддерживать контакт и помогать им"),
         ],
     },
     {
@@ -59,41 +64,41 @@ QUESTIONS = [
     {
         "question": "3. Какой результат работы приносит вам больше удовлетворения?",
         "options": [
+            ("C", "Появляются новые партнёрства, возможности и реальные договорённости"),
             ("A", "Люди довольны, вовлечены и остаются в контакте"),
             ("B", "Проект растёт, о нём начинают говорить и узнавать"),
-            ("C", "Появляются новые партнёрства, возможности и реальные договорённости"),
         ],
     },
     {
         "question": "4. Если вам дают новый проект, что интереснее сделать в первую очередь?",
         "options": [
-            ("A", "Понять аудиторию и как с ней выстроить доверие"),
             ("B", "Подумать, как лучше упаковать и продвинуть проект"),
+            ("A", "Понять аудиторию и как с ней выстроить доверие"),
             ("C", "Понять, с кем можно быстро сделать сильные партнёрства"),
         ],
     },
     {
         "question": "5. Какой формат задач вам ближе?",
         "options": [
-            ("A", "Много общения, поддержка людей, ответы и вовлечение"),
-            ("B", "Контент, идеи, продвижение, работа с вниманием аудитории"),
             ("C", "Переговоры, партнёры, новые возможности и развитие связей"),
+            ("B", "Контент, идеи, продвижение, работа с вниманием аудитории"),
+            ("A", "Много общения, поддержка людей, ответы и вовлечение"),
         ],
     },
     {
         "question": "6. Как вы чаще всего принимаете решения в работе?",
         "options": [
             ("A", "Думаю, как это повлияет на людей и отношения"),
-            ("B", "Думаю, как это поможет росту, образу и продвижению"),
             ("C", "Думаю, какой практический результат и новые возможности это даст"),
+            ("B", "Думаю, как это поможет росту, образу и продвижению"),
         ],
     },
     {
         "question": "7. Какая обратная связь о вас звучит наиболее правдоподобно?",
         "options": [
-            ("A", "С тобой легко общаться, ты умеешь слышать людей"),
             ("B", "У тебя сильное чувство идеи, упаковки и продвижения"),
             ("C", "Ты умеешь договариваться и двигать дела вперёд"),
+            ("A", "С тобой легко общаться, ты умеешь слышать людей"),
         ],
     },
     {
@@ -107,9 +112,9 @@ QUESTIONS = [
     {
         "question": "9. Если представить вашу идеальную роль в Web3, что ближе?",
         "options": [
+            ("C", "Открывать проекту новые возможности через связи и сотрудничество"),
             ("A", "Быть лицом общения между проектом и аудиторией"),
             ("B", "Отвечать за рост, маркетинг и интерес к проекту"),
-            ("C", "Открывать проекту новые возможности через связи и сотрудничество"),
         ],
     },
 ]
@@ -126,29 +131,38 @@ ROLE_URLS = {
     "C": BD_URL,
 }
 
+ROLE_SALARY = {
+    "A": "Ориентир по доходу на международном рынке: от $1500 до $5000+",
+    "B": "Ориентир по доходу на международном рынке: от $2000 до $7000+",
+    "C": "Ориентир по доходу на международном рынке: от $3000 до $8000+",
+}
+
+ROLE_WHAT_YOU_DO = {
+    "A": "Что вы будете делать: вести комьюнити, общаться с аудиторией, поддерживать активность и вовлечение вокруг проекта.",
+    "B": "Что вы будете делать: продвигать проекты, работать с контентом, маркетинговыми кампаниями и ростом аудитории.",
+    "C": "Что вы будете делать: искать партнёров, запускать коллаборации, выстраивать связи и открывать проекту новые возможности роста.",
+}
+
 RESULT_TEXTS = {
     "A": {
         "title": "Ваш основной трек — Community Manager",
         "body": (
-            "Вам ближе работа с людьми, коммуникация и выстраивание доверия.\n\n"
-            "Скорее всего, вы хорошо чувствуете аудиторию, умеете поддерживать контакт "
-            "и создавать вовлечённость вокруг проекта."
+            "Ваши ответы показывают, что вам ближе работа с людьми, коммуникация и выстраивание доверия.\n\n"
+            "Скорее всего, именно в этом направлении ваши сильные стороны смогут раскрыться лучше всего."
         ),
     },
     "B": {
         "title": "Ваш основной трек — Web3 Marketing",
         "body": (
-            "Вам ближе рост, идеи, упаковка и продвижение проекта.\n\n"
-            "Скорее всего, вы мыслите категориями внимания аудитории, интереса к продукту "
-            "и того, как сделать проект заметнее."
+            "Ваши ответы показывают, что вам ближе рост, идеи, упаковка и продвижение проекта.\n\n"
+            "Скорее всего, именно в этом направлении ваши сильные стороны смогут раскрыться лучше всего."
         ),
     },
     "C": {
         "title": "Ваш основной трек — Business Development",
         "body": (
-            "Вам ближе развитие через возможности, связи и переговоры.\n\n"
-            "Скорее всего, вы умеете видеть точки роста, быстро ориентируетесь в новых контактах "
-            "и чувствуете себя уверенно в коммуникации с партнёрами."
+            "Ваши ответы показывают, что вам ближе развитие через возможности, связи и переговоры.\n\n"
+            "Скорее всего, именно в этом направлении ваши сильные стороны смогут раскрыться лучше всего."
         ),
     },
 }
@@ -159,31 +173,37 @@ def get_entry_keyboard():
         [InlineKeyboardButton("Сначала пройти курс", url=COURSE_URL)],
     ])
 
-def build_question_text(index):
+def build_question_text(index: int) -> str:
     question_data = QUESTIONS[index]
     lines = [f"Вопрос {index + 1} из {len(QUESTIONS)}", "", question_data["question"], ""]
-    for code, text in question_data["options"]:
-        lines.append(f"{code}. {text}")
+    # Показываем A/B/C по фактическому порядку ответов
+    label_map = ["A", "B", "C"]
+    for i, (_, text) in enumerate(question_data["options"]):
+        lines.append(f"{label_map[i]}. {text}")
     return "\n".join(lines)
 
-def build_question_keyboard(index):
+def build_question_keyboard(index: int):
+    options = QUESTIONS[index]["options"]
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("A", callback_data=f"answer:{index}:A"),
-        InlineKeyboardButton("B", callback_data=f"answer:{index}:B"),
-        InlineKeyboardButton("C", callback_data=f"answer:{index}:C"),
+        InlineKeyboardButton("A", callback_data=f"answer:{index}:{options[0][0]}"),
+        InlineKeyboardButton("B", callback_data=f"answer:{index}:{options[1][0]}"),
+        InlineKeyboardButton("C", callback_data=f"answer:{index}:{options[2][0]}"),
     ]])
 
-def get_result_keyboard(primary_code, secondary_code=None):
-    rows = [
-        [InlineKeyboardButton(f"Открыть программу: {ROLE_NAMES[primary_code]}", callback_data=f"open_program:{primary_code}")]
-    ]
+def get_result_keyboard(primary_code: str):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"Посмотреть программу: {ROLE_NAMES[primary_code]}", callback_data=f"open_program:{primary_code}")],
+        [InlineKeyboardButton("Посмотреть другие направления", callback_data="choose_other_program")],
+        [InlineKeyboardButton("Получить помощь с выбором", callback_data="contact_manager")],
+        [InlineKeyboardButton("Пройти тест заново", callback_data="restart_test")],
+    ])
 
-    if secondary_code and secondary_code != primary_code:
-        rows.append([InlineKeyboardButton(f"Альтернативно: {ROLE_NAMES[secondary_code]}", callback_data=f"open_program:{secondary_code}")])
-
-    rows.append([InlineKeyboardButton("Задать вопрос менеджеру", callback_data="contact_manager")])
-    rows.append([InlineKeyboardButton("Пройти тест заново", callback_data="restart_test")])
-
+def get_other_programs_keyboard(primary_code: str):
+    rows = []
+    for code in ["A", "B", "C"]:
+        if code != primary_code:
+            rows.append([InlineKeyboardButton(ROLE_NAMES[code], callback_data=f"open_program:{code}")])
+    rows.append([InlineKeyboardButton("Получить помощь с выбором", callback_data="contact_manager")])
     return InlineKeyboardMarkup(rows)
 
 def calculate_result(scores):
@@ -191,6 +211,7 @@ def calculate_result(scores):
     primary_code = sorted_scores[0][0]
     secondary_code = sorted_scores[1][0]
 
+    # Дополнительный трек показываем только если он близок к основному
     if (sorted_scores[0][1] - sorted_scores[1][1]) > 1 or sorted_scores[1][1] == 0:
         secondary_code = None
 
@@ -201,6 +222,8 @@ def format_result(scores):
 
     title = RESULT_TEXTS[primary_code]["title"]
     body = RESULT_TEXTS[primary_code]["body"]
+    what_you_do = ROLE_WHAT_YOU_DO[primary_code]
+    salary = ROLE_SALARY[primary_code]
 
     extra = ""
     if secondary_code and secondary_code != primary_code:
@@ -215,15 +238,18 @@ def format_result(scores):
 
     final_text = (
         f"{title}\n\n"
-        f"{body}"
+        f"{body}\n\n"
+        f"{what_you_do}\n\n"
+        f"{salary}\n"
+        "Уровень зависит от опыта, навыков, английского языка и типа компании."
         f"{extra}"
         f"{score_line}\n\n"
-        "Следующий шаг — изучить программу глубже и выбрать направление, с которого вы хотите начать."
+        "Следующий шаг — выбрать направление и посмотреть программу глубже, пока у вас есть ясность после теста."
     )
 
     return primary_code, final_text, secondary_code
 
-async def send_result_to_admin(user, scores, primary_code, secondary_code, context):
+async def send_result_to_admin(user, scores, primary_code, secondary_code, context: ContextTypes.DEFAULT_TYPE):
     username = f"@{user.username}" if user.username else "без username"
 
     text = (
@@ -241,7 +267,7 @@ async def send_result_to_admin(user, scores, primary_code, secondary_code, conte
 
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
 
-async def notify_admin_click(user, action_text, context):
+async def notify_admin_click(user, action_text: str, context: ContextTypes.DEFAULT_TYPE):
     username = f"@{user.username}" if user.username else "без username"
     text = (
         "🟡 Действие после теста\n\n"
@@ -256,7 +282,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text(WELCOME_TEXT, reply_markup=get_entry_keyboard())
 
-async def handle_start_test(query, context):
+async def handle_start_test(query, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["scores"] = {"A": 0, "B": 0, "C": 0}
     context.user_data["question_index"] = 0
 
@@ -265,7 +291,7 @@ async def handle_start_test(query, context):
         reply_markup=build_question_keyboard(0)
     )
 
-async def handle_answer(query, context, question_index, answer_code):
+async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_index: int, answer_code: str):
     current_index = context.user_data.get("question_index")
 
     if current_index is None or question_index != current_index:
@@ -294,7 +320,7 @@ async def handle_answer(query, context, question_index, answer_code):
 
         await query.message.edit_text(
             result_text,
-            reply_markup=get_result_keyboard(primary_code, secondary_code)
+            reply_markup=get_result_keyboard(primary_code)
         )
         return
 
@@ -303,7 +329,7 @@ async def handle_answer(query, context, question_index, answer_code):
         reply_markup=build_question_keyboard(next_index)
     )
 
-async def handle_open_program(query, context, role_code):
+async def handle_open_program(query, context: ContextTypes.DEFAULT_TYPE, role_code: str):
     role_name = ROLE_NAMES[role_code]
     url = ROLE_URLS[role_code]
 
@@ -316,13 +342,24 @@ async def handle_open_program(query, context, role_code):
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(f"Перейти к программе: {role_name}", url=url)],
-        [InlineKeyboardButton("Задать вопрос менеджеру", callback_data="contact_manager")]
+        [InlineKeyboardButton("Получить помощь с выбором", callback_data="contact_manager")]
     ])
 
     await query.message.reply_text(text, reply_markup=keyboard)
 
-async def handle_contact_manager(query, context):
-    await notify_admin_click(query.from_user, "Нажал кнопку: Задать вопрос менеджеру", context)
+async def handle_choose_other_program(query, context: ContextTypes.DEFAULT_TYPE):
+    primary_code = context.user_data.get("primary_code")
+    if not primary_code:
+        await query.message.reply_text("Сначала пройдите тест.")
+        return
+
+    await notify_admin_click(query.from_user, "Нажал кнопку: Посмотреть другие направления", context)
+
+    text = "Вот другие направления, которые вы тоже можете рассмотреть:"
+    await query.message.reply_text(text, reply_markup=get_other_programs_keyboard(primary_code))
+
+async def handle_contact_manager(query, context: ContextTypes.DEFAULT_TYPE):
+    await notify_admin_click(query.from_user, "Нажал кнопку: Получить помощь с выбором", context)
 
     text = (
         "Если хотите, мы поможем выбрать подходящее направление и ответим на ваши вопросы.\n\n"
@@ -353,6 +390,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("open_program:"):
         _, role_code = data.split(":")
         await handle_open_program(query, context, role_code)
+        return
+
+    if data == "choose_other_program":
+        await handle_choose_other_program(query, context)
         return
 
     if data == "contact_manager":
