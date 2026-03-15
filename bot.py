@@ -17,6 +17,7 @@ try:
 except ValueError:
     raise ValueError("ADMIN_CHAT_ID должен быть числом, например: 123456789 или -1001234567890")
 
+COURSE_URL = os.getenv("COURSE_URL", "https://t.me/your_course_channel")
 COMMUNITY_URL = os.getenv("COMMUNITY_URL", "https://t.me/your_channel_post_community")
 MARKETING_URL = os.getenv("MARKETING_URL", "https://t.me/your_channel_post_marketing")
 BD_URL = os.getenv("BD_URL", "https://t.me/your_channel_post_bd")
@@ -24,16 +25,18 @@ MANAGER_URL = os.getenv("MANAGER_URL", "https://t.me/your_manager_username")
 
 # ===== Тексты =====
 WELCOME_TEXT = """
-Привет! Я бот 2026UP 🚀
+Тест на профессию 2026UP 🚀
 
-После бесплатного курса я помогу определить,
-какое направление в Web3 подходит вам больше всего:
+Этот тест лучше проходить после бесплатного курса «Введение в Web3».
 
-• Community Manager
-• Web3 Marketing
-• Business Development
+Вы уже прошли бесплатный курс?
+"""
 
-Нажмите кнопку ниже, чтобы начать тест.
+START_TEST_TEXT = """
+Отлично. Тогда давайте определим, какое направление в Web3 подходит вам больше всего.
+
+Тест состоит из 9 коротких вопросов.
+Отвечайте интуитивно — так результат будет точнее.
 """
 
 QUESTIONS = [
@@ -150,20 +153,25 @@ RESULT_TEXTS = {
     },
 }
 
-def get_start_keyboard():
+def get_entry_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("Пройти тест", callback_data="start_test")]
+        [InlineKeyboardButton("Да, пройти тест", callback_data="passed_course_yes")],
+        [InlineKeyboardButton("Сначала пройти курс", url=COURSE_URL)],
     ])
 
 def build_question_text(index):
-    progress = f"Вопрос {index + 1} из {len(QUESTIONS)}\n\n"
-    return progress + QUESTIONS[index]["question"]
+    question_data = QUESTIONS[index]
+    lines = [f"Вопрос {index + 1} из {len(QUESTIONS)}", "", question_data["question"], ""]
+    for code, text in question_data["options"]:
+        lines.append(f"{code}. {text}")
+    return "\n".join(lines)
 
 def build_question_keyboard(index):
-    rows = []
-    for code, text in QUESTIONS[index]["options"]:
-        rows.append([InlineKeyboardButton(text, callback_data=f"answer:{index}:{code}")])
-    return InlineKeyboardMarkup(rows)
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("A", callback_data=f"answer:{index}:A"),
+        InlineKeyboardButton("B", callback_data=f"answer:{index}:B"),
+        InlineKeyboardButton("C", callback_data=f"answer:{index}:C"),
+    ]])
 
 def get_result_keyboard(primary_code, secondary_code=None):
     rows = [
@@ -246,14 +254,14 @@ async def notify_admin_click(user, action_text, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text(WELCOME_TEXT, reply_markup=get_start_keyboard())
+    await update.message.reply_text(WELCOME_TEXT, reply_markup=get_entry_keyboard())
 
 async def handle_start_test(query, context):
     context.user_data["scores"] = {"A": 0, "B": 0, "C": 0}
     context.user_data["question_index"] = 0
 
     await query.message.edit_text(
-        build_question_text(0),
+        START_TEST_TEXT + "\n\n" + build_question_text(0),
         reply_markup=build_question_keyboard(0)
     )
 
@@ -333,7 +341,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    if data in ("start_test", "restart_test"):
+    if data in ("passed_course_yes", "restart_test"):
         await handle_start_test(query, context)
         return
 
