@@ -1,4 +1,5 @@
 import os
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -43,6 +44,12 @@ START_TEST_TEXT = """
 Вопросы построены так, чтобы определить ваши сильные стороны и наиболее подходящее направление в Web3.
 Отвечайте интуитивно — так результат будет точнее.
 """
+
+ANALYSIS_STEPS = [
+    "Анализируем ваши ответы…",
+    "Сопоставляем ваши сильные стороны с направлениями Web3…",
+    "Готовим персональную рекомендацию…",
+]
 
 QUESTIONS = [
     {
@@ -167,20 +174,22 @@ RESULT_TEXTS = {
     },
 }
 
+
 def get_entry_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Да, пройти тест", callback_data="passed_course_yes")],
         [InlineKeyboardButton("Сначала пройти курс", url=COURSE_URL)],
     ])
 
+
 def build_question_text(index: int) -> str:
     question_data = QUESTIONS[index]
     lines = [f"Вопрос {index + 1} из {len(QUESTIONS)}", "", question_data["question"], ""]
-    # Показываем A/B/C по фактическому порядку ответов
     label_map = ["A", "B", "C"]
     for i, (_, text) in enumerate(question_data["options"]):
         lines.append(f"{label_map[i]}. {text}")
     return "\n".join(lines)
+
 
 def build_question_keyboard(index: int):
     options = QUESTIONS[index]["options"]
@@ -190,6 +199,7 @@ def build_question_keyboard(index: int):
         InlineKeyboardButton("C", callback_data=f"answer:{index}:{options[2][0]}"),
     ]])
 
+
 def get_result_keyboard(primary_code: str):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"Посмотреть программу: {ROLE_NAMES[primary_code]}", callback_data=f"open_program:{primary_code}")],
@@ -197,6 +207,7 @@ def get_result_keyboard(primary_code: str):
         [InlineKeyboardButton("Получить помощь с выбором", callback_data="contact_manager")],
         [InlineKeyboardButton("Пройти тест заново", callback_data="restart_test")],
     ])
+
 
 def get_other_programs_keyboard(primary_code: str):
     rows = []
@@ -206,16 +217,17 @@ def get_other_programs_keyboard(primary_code: str):
     rows.append([InlineKeyboardButton("Получить помощь с выбором", callback_data="contact_manager")])
     return InlineKeyboardMarkup(rows)
 
+
 def calculate_result(scores):
     sorted_scores = sorted(scores.items(), key=lambda item: item[1], reverse=True)
     primary_code = sorted_scores[0][0]
     secondary_code = sorted_scores[1][0]
 
-    # Дополнительный трек показываем только если он близок к основному
     if (sorted_scores[0][1] - sorted_scores[1][1]) > 1 or sorted_scores[1][1] == 0:
         secondary_code = None
 
     return primary_code, secondary_code
+
 
 def format_result(scores):
     primary_code, secondary_code = calculate_result(scores)
@@ -249,6 +261,7 @@ def format_result(scores):
 
     return primary_code, final_text, secondary_code
 
+
 async def send_result_to_admin(user, scores, primary_code, secondary_code, context: ContextTypes.DEFAULT_TYPE):
     username = f"@{user.username}" if user.username else "без username"
 
@@ -267,6 +280,7 @@ async def send_result_to_admin(user, scores, primary_code, secondary_code, conte
 
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
 
+
 async def notify_admin_click(user, action_text: str, context: ContextTypes.DEFAULT_TYPE):
     username = f"@{user.username}" if user.username else "без username"
     text = (
@@ -278,9 +292,18 @@ async def notify_admin_click(user, action_text: str, context: ContextTypes.DEFAU
     )
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
 
+
+async def animate_analysis(message, context: ContextTypes.DEFAULT_TYPE):
+    for step in ANALYSIS_STEPS:
+        await message.edit_text(step)
+        await asyncio.sleep(1.2)
+    await context.bot.send_chat_action(chat_id=message.chat_id, action="typing")
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text(WELCOME_TEXT, reply_markup=get_entry_keyboard())
+
 
 async def handle_start_test(query, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["scores"] = {"A": 0, "B": 0, "C": 0}
@@ -290,6 +313,7 @@ async def handle_start_test(query, context: ContextTypes.DEFAULT_TYPE):
         START_TEST_TEXT + "\n\n" + build_question_text(0),
         reply_markup=build_question_keyboard(0)
     )
+
 
 async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_index: int, answer_code: str):
     current_index = context.user_data.get("question_index")
@@ -310,6 +334,8 @@ async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_inde
         context.user_data["primary_code"] = primary_code
         context.user_data["secondary_code"] = secondary_code
 
+        await animate_analysis(query.message, context)
+
         await send_result_to_admin(
             user=query.from_user,
             scores=scores,
@@ -329,6 +355,7 @@ async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_inde
         reply_markup=build_question_keyboard(next_index)
     )
 
+
 async def handle_open_program(query, context: ContextTypes.DEFAULT_TYPE, role_code: str):
     role_name = ROLE_NAMES[role_code]
     url = ROLE_URLS[role_code]
@@ -347,6 +374,7 @@ async def handle_open_program(query, context: ContextTypes.DEFAULT_TYPE, role_co
 
     await query.message.reply_text(text, reply_markup=keyboard)
 
+
 async def handle_choose_other_program(query, context: ContextTypes.DEFAULT_TYPE):
     primary_code = context.user_data.get("primary_code")
     if not primary_code:
@@ -357,6 +385,7 @@ async def handle_choose_other_program(query, context: ContextTypes.DEFAULT_TYPE)
 
     text = "Вот другие направления, которые вы тоже можете рассмотреть:"
     await query.message.reply_text(text, reply_markup=get_other_programs_keyboard(primary_code))
+
 
 async def handle_contact_manager(query, context: ContextTypes.DEFAULT_TYPE):
     await notify_admin_click(query.from_user, "Нажал кнопку: Получить помощь с выбором", context)
@@ -371,6 +400,7 @@ async def handle_contact_manager(query, context: ContextTypes.DEFAULT_TYPE):
     ])
 
     await query.message.reply_text(text, reply_markup=keyboard)
+
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -400,6 +430,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_contact_manager(query, context)
         return
 
+
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -408,6 +439,7 @@ def main():
 
     print("2026UP test bot started...")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
