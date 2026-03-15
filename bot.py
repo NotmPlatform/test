@@ -6,6 +6,7 @@ from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.error import BadRequest
 
 
 # =========================
@@ -31,7 +32,8 @@ MARKETING_URL = os.getenv("MARKETING_URL", "https://t.me/your_channel_post_marke
 BD_URL = os.getenv("BD_URL", "https://t.me/your_channel_post_bd")
 MANAGER_URL = os.getenv("MANAGER_URL", "https://t.me/your_manager_username")
 
-DB_PATH = "2026up_test_bot.db"
+DB_PATH = os.getenv("DB_PATH", "2026up_test_bot.db")
+FOLLOWUP_DELAY_SECONDS = int(os.getenv("FOLLOWUP_DELAY_SECONDS", "900"))  # 15 минут
 
 
 # =========================
@@ -56,16 +58,24 @@ START_TEST_TEXT = """
 Отвечайте интуитивно — так результат будет точнее.
 """
 
+RESUME_TEXT = """
+У вас есть незавершённый тест.
+
+Нажмите кнопку ниже, чтобы продолжить с того места, где вы остановились.
+"""
+
 ANALYSIS_STEPS = [
     "Анализируем ваши ответы…",
     "Сопоставляем ваши сильные стороны с направлениями Web3…",
     "Готовим персональную рекомендацию…",
 ]
 
+FOLLOWUP_TEXT = """
+Вы уже получили результат теста 2026UP.
 
-# =========================
-# QUESTIONS
-# =========================
+Если хотите, мы поможем понять, с какого направления лучше начать именно вам.
+"""
+
 QUESTIONS = [
     {
         "question": "1. Что вам обычно даётся легче всего?",
@@ -141,7 +151,6 @@ QUESTIONS = [
     },
 ]
 
-
 ROLE_NAMES = {
     "A": "Community Manager",
     "B": "Web3 Marketing",
@@ -155,39 +164,21 @@ ROLE_URLS = {
 }
 
 ROLE_SALARY = {
-    "A": "Ориентир по доходу на международном рынке: от $1500 до $5000+",
-    "B": "Ориентир по доходу на международном рынке: от $2000 до $7000+",
-    "C": "Ориентир по доходу на международном рынке: от $3000 до $8000+",
+    "A": "от $1500 до $5000+",
+    "B": "от $2000 до $7000+",
+    "C": "от $3000 до $8000+",
 }
 
 ROLE_WHAT_YOU_DO = {
-    "A": "Что вы будете делать: вести комьюнити, общаться с аудиторией, поддерживать активность и вовлечение вокруг проекта.",
-    "B": "Что вы будете делать: продвигать проекты, работать с контентом, маркетинговыми кампаниями и ростом аудитории.",
-    "C": "Что вы будете делать: искать партнёров, запускать коллаборации, выстраивать связи и открывать проекту новые возможности роста.",
+    "A": "Вести комьюнити, общаться с аудиторией, поддерживать активность и вовлечение.",
+    "B": "Продвигать проекты, работать с контентом, маркетинговыми кампаниями и ростом аудитории.",
+    "C": "Искать партнёров, запускать коллаборации, выстраивать связи и открывать проекту новые возможности роста.",
 }
 
-RESULT_TEXTS = {
-    "A": {
-        "title": "Ваш основной трек — Community Manager",
-        "body": (
-            "Ваши ответы показывают, что вам ближе работа с людьми, коммуникация и выстраивание доверия.\n\n"
-            "Скорее всего, именно в этом направлении ваши сильные стороны смогут раскрыться лучше всего."
-        ),
-    },
-    "B": {
-        "title": "Ваш основной трек — Web3 Marketing",
-        "body": (
-            "Ваши ответы показывают, что вам ближе рост, идеи, упаковка и продвижение проекта.\n\n"
-            "Скорее всего, именно в этом направлении ваши сильные стороны смогут раскрыться лучше всего."
-        ),
-    },
-    "C": {
-        "title": "Ваш основной трек — Business Development",
-        "body": (
-            "Ваши ответы показывают, что вам ближе развитие через возможности, связи и переговоры.\n\n"
-            "Скорее всего, именно в этом направлении ваши сильные стороны смогут раскрыться лучше всего."
-        ),
-    },
+ROLE_WHY = {
+    "A": "Вам ближе работа с людьми, коммуникация и выстраивание доверия.",
+    "B": "Вам ближе рост, идеи, упаковка и продвижение проекта.",
+    "C": "Вам ближе развитие через возможности, связи и переговоры.",
 }
 
 
@@ -199,7 +190,7 @@ def now_str():
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -216,6 +207,9 @@ def init_db():
             history_json TEXT NOT NULL,
             primary_code TEXT,
             secondary_code TEXT,
+            result_ready INTEGER NOT NULL DEFAULT 0,
+            engaged_after_result INTEGER NOT NULL DEFAULT 0,
+            followup_sent INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL
         )
     """)
@@ -248,20 +242,34 @@ def init_db():
     conn.close()
 
 
-def save_session(user_id, current_index, scores, history, primary_code=None, secondary_code=None):
+def save_session(
+    user_id,
+    current_index,
+    scores,
+    history,
+    primary_code=None,
+    secondary_code=None,
+    result_ready=0,
+    engaged_after_result=0,
+    followup_sent=0,
+):
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO user_sessions (
-            user_id, current_index, scores_json, history_json, primary_code, secondary_code, updated_at
+            user_id, current_index, scores_json, history_json, primary_code, secondary_code,
+            result_ready, engaged_after_result, followup_sent, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
             current_index=excluded.current_index,
             scores_json=excluded.scores_json,
             history_json=excluded.history_json,
             primary_code=excluded.primary_code,
             secondary_code=excluded.secondary_code,
+            result_ready=excluded.result_ready,
+            engaged_after_result=excluded.engaged_after_result,
+            followup_sent=excluded.followup_sent,
             updated_at=excluded.updated_at
     """, (
         user_id,
@@ -270,6 +278,9 @@ def save_session(user_id, current_index, scores, history, primary_code=None, sec
         json.dumps(history, ensure_ascii=False),
         primary_code,
         secondary_code,
+        result_ready,
+        engaged_after_result,
+        followup_sent,
         now_str(),
     ))
     conn.commit()
@@ -293,8 +304,36 @@ def get_session(user_id):
         "history": json.loads(row["history_json"]),
         "primary_code": row["primary_code"],
         "secondary_code": row["secondary_code"],
+        "result_ready": row["result_ready"],
+        "engaged_after_result": row["engaged_after_result"],
+        "followup_sent": row["followup_sent"],
         "updated_at": row["updated_at"],
     }
+
+
+def update_result_engagement(user_id, engaged=None, followup_sent=None):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    fields = []
+    values = []
+
+    if engaged is not None:
+        fields.append("engaged_after_result = ?")
+        values.append(1 if engaged else 0)
+
+    if followup_sent is not None:
+        fields.append("followup_sent = ?")
+        values.append(1 if followup_sent else 0)
+
+    fields.append("updated_at = ?")
+    values.append(now_str())
+    values.append(user_id)
+
+    query = f"UPDATE user_sessions SET {', '.join(fields)} WHERE user_id = ?"
+    cur.execute(query, values)
+    conn.commit()
+    conn.close()
 
 
 def delete_session(user_id):
@@ -345,10 +384,30 @@ def save_action(user, action_text):
     conn.close()
 
 
+async def safe_edit_message(message, text, reply_markup=None):
+    try:
+        await message.edit_text(text, reply_markup=reply_markup)
+    except BadRequest as e:
+        msg = str(e).lower()
+        if "message is not modified" in msg:
+            return
+        if "message can't be edited" in msg or "message to edit not found" in msg:
+            await message.reply_text(text, reply_markup=reply_markup)
+            return
+        raise
+
+
 def get_entry_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Да, пройти тест", callback_data="passed_course_yes")],
         [InlineKeyboardButton("Сначала пройти курс", url=COURSE_URL)],
+    ])
+
+
+def get_resume_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Продолжить тест", callback_data="resume_test")],
+        [InlineKeyboardButton("Начать заново", callback_data="restart_test")],
     ])
 
 
@@ -392,7 +451,7 @@ def get_result_keyboard(primary_code):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"Посмотреть программу: {ROLE_NAMES[primary_code]}", callback_data=f"open_program:{primary_code}")],
         [InlineKeyboardButton("Посмотреть другие направления", callback_data="choose_other_program")],
-        [InlineKeyboardButton("Помочь выбрать направление", callback_data="contact_manager")],
+        [InlineKeyboardButton("Обсудить, что подойдёт именно вам", callback_data="contact_manager")],
         [InlineKeyboardButton("Пройти тест заново", callback_data="restart_test")],
     ])
 
@@ -402,7 +461,15 @@ def get_other_programs_keyboard(primary_code):
     for code in ["A", "B", "C"]:
         if code != primary_code:
             rows.append([InlineKeyboardButton(ROLE_NAMES[code], callback_data=f"open_program:{code}")])
-    rows.append([InlineKeyboardButton("Помочь выбрать направление", callback_data="contact_manager")])
+    rows.append([InlineKeyboardButton("Обсудить, что подойдёт именно вам", callback_data="contact_manager")])
+    return InlineKeyboardMarkup(rows)
+
+
+def get_followup_keyboard(primary_code=None):
+    rows = []
+    if primary_code:
+        rows.append([InlineKeyboardButton(f"Посмотреть программу: {ROLE_NAMES[primary_code]}", callback_data=f"open_program:{primary_code}")])
+    rows.append([InlineKeyboardButton("Обсудить, что подойдёт именно вам", callback_data="contact_manager")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -420,37 +487,41 @@ def calculate_result(scores):
 def format_result(scores):
     primary_code, secondary_code = calculate_result(scores)
 
-    title = RESULT_TEXTS[primary_code]["title"]
-    body = RESULT_TEXTS[primary_code]["body"]
-    what_you_do = ROLE_WHAT_YOU_DO[primary_code]
-    salary = ROLE_SALARY[primary_code]
+    blocks = [
+        f"{RESULT_TEXTS[primary_code]['title']}",
+        "",
+        "Почему подходит:",
+        ROLE_WHY[primary_code],
+        "",
+        "Что вы будете делать:",
+        ROLE_WHAT_YOU_DO[primary_code],
+        "",
+        "Ориентир по доходу:",
+        f"{ROLE_SALARY[primary_code]}",
+        "Уровень зависит от опыта, навыков, английского языка и типа компании.",
+    ]
 
-    extra = ""
     if secondary_code and secondary_code != primary_code:
-        extra = f"\n\nДополнительно вам может подойти: {ROLE_NAMES[secondary_code]}"
+        blocks.extend([
+            "",
+            f"Дополнительно вам может подойти: {ROLE_NAMES[secondary_code]}",
+        ])
 
-    score_line = (
-        f"\n\nВаш профиль по результатам теста:\n"
-        f"• Community Manager: {scores['A']}\n"
-        f"• Web3 Marketing: {scores['B']}\n"
-        f"• Business Development: {scores['C']}"
-    )
+    blocks.extend([
+        "",
+        "Ваш профиль по результатам теста:",
+        f"• Community Manager: {scores['A']}",
+        f"• Web3 Marketing: {scores['B']}",
+        f"• Business Development: {scores['C']}",
+        "",
+        "Следующий шаг:",
+        "посмотрите программу или обсудите, с какого направления лучше начать именно вам.",
+    ])
 
-    final_text = (
-        f"{title}\n\n"
-        f"{body}\n\n"
-        f"{what_you_do}\n\n"
-        f"{salary}\n"
-        "Уровень зависит от опыта, навыков, английского языка и типа компании."
-        f"{extra}"
-        f"{score_line}\n\n"
-        "Следующий шаг — выбрать направление и посмотреть программу глубже, пока у вас есть ясность после теста."
-    )
-
-    return primary_code, final_text, secondary_code
+    return primary_code, "\n".join(blocks), secondary_code
 
 
-async def send_result_to_admin(user, scores, primary_code, secondary_code, context: ContextTypes.DEFAULT_TYPE):
+async def send_result_to_admin(user, scores, primary_code, secondary_code, context):
     username = f"@{user.username}" if user.username else "без username"
 
     text = (
@@ -470,7 +541,7 @@ async def send_result_to_admin(user, scores, primary_code, secondary_code, conte
     await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
 
 
-async def notify_admin_click(user, action_text, context: ContextTypes.DEFAULT_TYPE):
+async def notify_admin_click(user, action_text, context):
     username = f"@{user.username}" if user.username else "без username"
 
     text = (
@@ -487,17 +558,65 @@ async def notify_admin_click(user, action_text, context: ContextTypes.DEFAULT_TY
 
 async def animate_analysis(message):
     for step in ANALYSIS_STEPS:
-        await message.edit_text(step)
+        await safe_edit_message(message, step)
         await asyncio.sleep(1.2)
+
+
+async def schedule_followup(user_id, context: ContextTypes.DEFAULT_TYPE):
+    await asyncio.sleep(FOLLOWUP_DELAY_SECONDS)
+
+    session = get_session(user_id)
+    if not session:
+        return
+
+    if session["result_ready"] != 1:
+        return
+
+    if session["engaged_after_result"] == 1 or session["followup_sent"] == 1:
+        return
+
+    primary_code = session.get("primary_code")
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=FOLLOWUP_TEXT,
+        reply_markup=get_followup_keyboard(primary_code)
+    )
+    update_result_engagement(user_id, followup_sent=True)
 
 
 # =========================
 # HANDLERS
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    delete_session(user_id)
+    session = get_session(update.effective_user.id)
+
+    if session and session["current_index"] < len(QUESTIONS):
+        save_action(update.effective_user, f"Вернулся в бот, незавершённый тест на вопросе {session['current_index'] + 1}")
+        await update.message.reply_text(RESUME_TEXT, reply_markup=get_resume_keyboard())
+        return
+
     await update.message.reply_text(WELCOME_TEXT, reply_markup=get_entry_keyboard())
+
+
+async def resume(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    session = get_session(update.effective_user.id)
+
+    if not session:
+        await update.message.reply_text("У вас нет незавершённого теста. Нажмите /start.")
+        return
+
+    index = session["current_index"]
+
+    if index >= len(QUESTIONS):
+        await update.message.reply_text("Тест уже завершён. Нажмите /start, чтобы пройти заново.")
+        return
+
+    save_action(update.effective_user, f"Продолжил тест с вопроса {index + 1}")
+
+    await update.message.reply_text(
+        build_question_text(index),
+        reply_markup=build_question_keyboard(index)
+    )
 
 
 async def handle_start_test(query, context: ContextTypes.DEFAULT_TYPE):
@@ -508,9 +627,33 @@ async def handle_start_test(query, context: ContextTypes.DEFAULT_TYPE):
     save_session(user.id, 0, scores, history)
     save_action(user, "Начал тест")
 
-    await query.message.edit_text(
+    await safe_edit_message(
+        query.message,
         START_TEST_TEXT + "\n\n" + build_question_text(0),
         reply_markup=build_question_keyboard(0)
+    )
+
+
+async def handle_resume_test(query, context: ContextTypes.DEFAULT_TYPE):
+    user = query.from_user
+    session = get_session(user.id)
+
+    if not session:
+        await query.message.reply_text("Сессия не найдена. Нажмите /start.")
+        return
+
+    index = session["current_index"]
+
+    if index >= len(QUESTIONS):
+        await query.message.reply_text("Тест уже завершён. Нажмите /start, чтобы пройти заново.")
+        return
+
+    save_action(user, f"Вернулся к тесту на вопросе {index + 1}")
+
+    await safe_edit_message(
+        query.message,
+        build_question_text(index),
+        reply_markup=build_question_keyboard(index)
     )
 
 
@@ -535,10 +678,26 @@ async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_inde
 
     next_index = question_index + 1
 
+    if next_index == 3:
+        save_action(user, "Дошёл до вопроса 3")
+
+    if next_index == 6:
+        save_action(user, "Дошёл до вопроса 6")
+
     if next_index >= len(QUESTIONS):
         primary_code, result_text, secondary_code = format_result(scores)
 
-        save_session(user.id, len(QUESTIONS), scores, history, primary_code, secondary_code)
+        save_session(
+            user.id,
+            len(QUESTIONS),
+            scores,
+            history,
+            primary_code,
+            secondary_code,
+            result_ready=1,
+            engaged_after_result=0,
+            followup_sent=0,
+        )
         save_result(user, scores, primary_code, secondary_code)
         save_action(user, "Завершил тест")
 
@@ -552,15 +711,27 @@ async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_inde
             context=context,
         )
 
-        await query.message.edit_text(
+        await safe_edit_message(
+            query.message,
             result_text,
             reply_markup=get_result_keyboard(primary_code)
         )
+
+        asyncio.create_task(schedule_followup(user.id, context))
         return
 
-    save_session(user.id, next_index, scores, history)
+    save_session(
+        user.id,
+        next_index,
+        scores,
+        history,
+        result_ready=0,
+        engaged_after_result=0,
+        followup_sent=0,
+    )
 
-    await query.message.edit_text(
+    await safe_edit_message(
+        query.message,
         build_question_text(next_index),
         reply_markup=build_question_keyboard(next_index)
     )
@@ -586,9 +757,21 @@ async def handle_go_back(query, context: ContextTypes.DEFAULT_TYPE):
     scores[last_answer] -= 1
     previous_index = current_index - 1
 
-    save_session(user.id, previous_index, scores, history)
+    save_session(
+        user.id,
+        previous_index,
+        scores,
+        history,
+        primary_code=session.get("primary_code"),
+        secondary_code=session.get("secondary_code"),
+        result_ready=0,
+        engaged_after_result=0,
+        followup_sent=0,
+    )
+    save_action(user, f"Вернулся назад на вопрос {previous_index + 1}")
 
-    await query.message.edit_text(
+    await safe_edit_message(
+        query.message,
         build_question_text(previous_index),
         reply_markup=build_question_keyboard(previous_index)
     )
@@ -598,6 +781,7 @@ async def handle_open_program(query, context: ContextTypes.DEFAULT_TYPE, role_co
     role_name = ROLE_NAMES[role_code]
     url = ROLE_URLS[role_code]
 
+    update_result_engagement(query.from_user.id, engaged=True)
     save_action(query.from_user, f"Открыл программу: {role_name}")
     await notify_admin_click(query.from_user, f"Открыл программу: {role_name}", context)
 
@@ -609,7 +793,7 @@ async def handle_open_program(query, context: ContextTypes.DEFAULT_TYPE, role_co
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(f"Перейти к программе: {role_name}", url=url)],
-        [InlineKeyboardButton("Помочь выбрать направление", callback_data="contact_manager")]
+        [InlineKeyboardButton("Обсудить, что подойдёт именно вам", callback_data="contact_manager")]
     ])
 
     await query.message.reply_text(text, reply_markup=keyboard)
@@ -624,16 +808,18 @@ async def handle_choose_other_program(query, context: ContextTypes.DEFAULT_TYPE)
 
     primary_code = session["primary_code"]
 
+    update_result_engagement(query.from_user.id, engaged=True)
     save_action(query.from_user, "Нажал кнопку: Посмотреть другие направления")
     await notify_admin_click(query.from_user, "Нажал кнопку: Посмотреть другие направления", context)
 
-    text = "Вот другие направления, которые вы тоже можете рассмотреть:"
+    text = "Если хотите сравнить ваш основной результат с другими треками, выберите направление ниже."
     await query.message.reply_text(text, reply_markup=get_other_programs_keyboard(primary_code))
 
 
 async def handle_contact_manager(query, context: ContextTypes.DEFAULT_TYPE):
-    save_action(query.from_user, "Нажал кнопку: Помочь выбрать направление")
-    await notify_admin_click(query.from_user, "Нажал кнопку: Помочь выбрать направление", context)
+    update_result_engagement(query.from_user.id, engaged=True)
+    save_action(query.from_user, "Нажал кнопку: Обсудить, что подойдёт именно вам")
+    await notify_admin_click(query.from_user, "Нажал кнопку: Обсудить, что подойдёт именно вам", context)
 
     text = (
         "Если хотите, мы поможем выбрать подходящее направление и ответим на ваши вопросы.\n\n"
@@ -654,7 +840,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data in ("passed_course_yes", "restart_test"):
+        if data == "restart_test":
+            delete_session(query.from_user.id)
+            save_action(query.from_user, "Нажал кнопку: Начать заново")
         await handle_start_test(query, context)
+        return
+
+    if data == "resume_test":
+        await handle_resume_test(query, context)
         return
 
     if data == "go_back":
@@ -686,6 +879,7 @@ def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("resume", resume))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     print("2026UP test bot started...")
