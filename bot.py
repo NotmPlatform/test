@@ -25,10 +25,10 @@ if ADMIN_CHAT_ID_RAW:
     except ValueError:
         raise ValueError("ADMIN_CHAT_ID должен быть числом, например 123456789 или -1001234567890")
 
-TRIBUTE_CM_URL = os.getenv("TRIBUTE_CM_URL", "https://tribute.tg/your_cm")
-TRIBUTE_MARKETING_URL = os.getenv("TRIBUTE_MARKETING_URL", "https://tribute.tg/your_marketing")
-TRIBUTE_BD_URL = os.getenv("TRIBUTE_BD_URL", "https://tribute.tg/your_bd")
-MANAGER_URL = os.getenv("MANAGER_URL", "https://t.me/your_manager_username")
+TRIBUTE_CM_URL = os.getenv("TRIBUTE_CM_URL", "https://t.me/tribute/app?startapp=sQSN")
+TRIBUTE_MARKETING_URL = os.getenv("TRIBUTE_MARKETING_URL", "https://t.me/tribute/app?startapp=sQVV")
+TRIBUTE_BD_URL = os.getenv("TRIBUTE_BD_URL", "https://t.me/tribute/app?startapp=sQWw")
+MANAGER_URL = os.getenv("MANAGER_URL", "https://t.me/BizManag")
 DB_PATH = os.getenv("DB_PATH", "2026up_career_test.db")
 
 
