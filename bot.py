@@ -499,6 +499,11 @@ def format_result(scores: Dict[str, int], question_set: List[dict], history: Lis
         f"• Web3 Маркетолог: {scores['B']}",
         f"• BD в Web3: {scores['C']}",
         "",
+         "Средние зарплаты в индустрии:",
+         "Community Manager💰 $1500-$5000",
+         "Web3 Marketing💰 $2000-$7000+",
+         "Business Development💰 $3000-$8000+",
+         "",
         "Ниже вы можете выбрать любой из трёх треков или обратиться к менеджеру за помощью.",
     ])
 
