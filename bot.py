@@ -89,6 +89,13 @@ RESUME_TEXT = (
 NO_ADMIN_WARNING = "ADMIN_CHAT_ID не указан. Результаты не будут отправляться в админ-чат."
 
 
+ANALYSIS_STEPS = [
+    "Ответы получены…",
+    "Мы анализируем ваши ответы…",
+    "Мы подбираем вам лучшую профессию…",
+]
+
+
 # =========================
 # QUESTION BANK (60)
 # =========================
@@ -908,6 +915,12 @@ async def handle_restart_test(query) -> None:
     await safe_edit_message(query.message, WELCOME_TEXT, reply_markup=get_entry_keyboard())
 
 
+async def animate_analysis(message) -> None:
+    for step in ANALYSIS_STEPS:
+        await safe_edit_message(message, step)
+        await asyncio.sleep(2)
+
+
 async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_index: int, answer_code: str) -> None:
     session = get_session(query.from_user.id)
     if not session:
@@ -931,6 +944,8 @@ async def handle_answer(query, context: ContextTypes.DEFAULT_TYPE, question_inde
         primary_code, secondary_code, third_code, result_text = format_result(scores)
         save_result(query.from_user, scores, primary_code, secondary_code, third_code)
         delete_session(query.from_user.id)
+
+        await animate_analysis(query.message)
 
         await safe_edit_message(
             query.message,
@@ -988,6 +1003,11 @@ def main() -> None:
 
     print("2026UP career test bot started...")
     app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
+
 
 
 if __name__ == "__main__":
