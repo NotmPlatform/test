@@ -2,6 +2,9 @@ import os
 import json
 import sqlite3
 import random
+import asyncio
+import logging
+import hashlib
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
@@ -10,10 +13,17 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 from telegram.error import BadRequest
 
 
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+
 # =========================
 # ENV
 # =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 if not BOT_TOKEN:
     raise ValueError("Не найдена переменная окружения BOT_TOKEN")
 
@@ -22,8 +32,8 @@ ADMIN_CHAT_ID: Optional[int] = None
 if ADMIN_CHAT_ID_RAW:
     try:
         ADMIN_CHAT_ID = int(ADMIN_CHAT_ID_RAW)
-    except ValueError:
-        raise ValueError("ADMIN_CHAT_ID должен быть числом, например 123456789 или -1001234567890")
+    except ValueError as e:
+        raise ValueError("ADMIN_CHAT_ID должен быть числом, например 123456789 или -1001234567890") from e
 
 TRIBUTE_CM_URL = os.getenv("TRIBUTE_CM_URL", "https://t.me/tribute/app?startapp=sQSN")
 TRIBUTE_MARKETING_URL = os.getenv("TRIBUTE_MARKETING_URL", "https://t.me/tribute/app?startapp=sQVV")
